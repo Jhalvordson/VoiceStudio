@@ -191,7 +191,7 @@ dependencies = [
     # (services/text_normalization.py). Was already installed transitively;
     # promoted to a direct dependency because we now import it ourselves.
     "num2words>=0.5.14",
-    "pip>=26.1.2",
+    "pip>=26.2.2",
     # Direct URL (not [tool.uv.sources]) so EVERY installer sees it — Docker's
     # `uv pip install --system .` reads only project metadata and would try to
     # resolve a bare name from PyPI, where spaCy models don't exist. Same form
