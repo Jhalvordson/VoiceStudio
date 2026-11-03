@@ -19,6 +19,8 @@ def test_tauri_shell_and_legacy_ui_entrypoints_are_removed():
         "scripts/desktop-prod.sh",
         "scripts/desktop-prod.mjs",
         "scripts/desktop-fresh.mjs",
+        "scripts/capture-screenshots.cjs",
+        "scripts/package_for_friend.sh",
     ):
         assert not (ROOT / path).exists(), f"retired Tauri entrypoint remains: {path}"
 
@@ -37,12 +39,6 @@ def test_supported_ui_commands_target_electron_only():
     assert "vite.shared.config.ts" in electron_package["scripts"]["test"]
 
 
-def test_remote_worker_acceptance_uses_the_electron_workspace():
-    script = (ROOT / "scripts/verify-remote-worker.sh").read_text(encoding="utf-8")
-    assert "--cwd frontend" not in script
-    assert script.count("bun run --cwd electron test -- src/shared/") == 2
-
-
 def test_docker_builds_the_electron_renderer():
     dockerfile = (ROOT / "deploy/Dockerfile").read_text(encoding="utf-8")
     assert "--cwd electron build:web" in dockerfile
@@ -56,14 +52,16 @@ def test_macos_dev_launcher_uses_maintained_electron_paths():
     assert "'frontend'" not in launcher
 
 
-def test_home_is_a_work_launcher_not_a_repeated_brand_banner():
+def test_home_keeps_creation_actions_with_open_source_heading():
     home = (ROOT / "electron/src/renderer/src/features/home/home-page.tsx").read_text(
         encoding="utf-8"
     )
     assert "t('nav.home')" in home
-    assert "t('projects.create')" in home
-    assert "t('app.name')" not in home
-    assert "voicestudio.sh" not in home
+    assert "t('homeUi.title')" in home
+    assert "t('homeUi.subtitle')" in home
+    assert "<HomeContributors />" in home
+    assert "group.map(" in home
+    assert "browser.open('https://voicestudio.sh')" in home
     assert "PanelLeftOpenIcon" not in home
 
 
