@@ -72,6 +72,8 @@ env:
 
 jobs:
   build-and-push:
+    # Images are published to debpalash's GHCR and Docker Hub namespaces.
+    if: github.repository == 'debpalash/VoiceStudio'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -238,6 +240,8 @@ jobs:
   # build step — so it gets a full runner disk to itself: the ROCm base alone
   # is ~10 GB compressed / ~25 GB unpacked.
   build-and-push-rocm:
+    # Same upstream registries as the CUDA job. Forks must not push.
+    if: github.repository == 'debpalash/VoiceStudio'
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4

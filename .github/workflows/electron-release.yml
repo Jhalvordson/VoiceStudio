@@ -209,6 +209,8 @@ jobs:
 
   release:
     needs: package
+    # Draft and published GitHub Releases stay on the upstream repository.
+    if: github.repository == 'debpalash/VoiceStudio'
     runs-on: ubuntu-latest
     permissions:
       contents: write
