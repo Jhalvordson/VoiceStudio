@@ -10,6 +10,7 @@ import time
 import uuid
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, File, Form, UploadFile, HTTPException, Query
 from fastapi.responses import FileResponse
@@ -21,10 +22,39 @@ from core import event_bus
 from core.audio_validation import resolve_regular_file
 from core.file_cleanup import FileCleanupError, unlink_if_present
 from services.ffmpeg_utils import spawn_subprocess
+from services.media_tools import ytdlp_invocation
 
 logger = logging.getLogger("omnivoice.gallery")
 
 router = APIRouter()
+
+_HTTP_URL_SCHEMES = frozenset({"http", "https"})
+
+
+def _require_http_video_url(video_url: str) -> str:
+    """Return a stripped http(s) URL, or raise 400.
+
+    yt-dlp treats a leading option as configuration. A cover upload returns
+    the saved file's absolute path, so ``video_url=--config-locations=<path>``
+    would load that file and can run ``--exec``. An http(s) scheme rejects
+    option-style and non-HTTP values before they are placed after ``--``.
+    """
+    url = (video_url or "").strip()
+    parsed = urlsplit(url)
+    hostname = parsed.hostname or ""
+    if (
+        parsed.scheme not in _HTTP_URL_SCHEMES
+        or not hostname
+        or hostname.startswith("-")
+        or url.startswith("-")
+        or any(ord(ch) < 32 for ch in url)
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="video_url must be an http or https URL",
+        )
+    return url
+
 
 VOICE_GALLERY_DIR = Path(os.path.join(OUTPUTS_DIR, "voice_gallery"))
 VOICE_GALLERY_DIR.mkdir(parents=True, exist_ok=True)
@@ -173,12 +203,15 @@ async def search_youtube(
     try:
         # yt-dlp is an importable module, never a PATH requirement — run it
         # via the interpreter (honors the Settings → Audio tools overlay).
-        from services.media_tools import ytdlp_invocation
+        # --ignore-config and "--" keep the search string from being read as
+        # an option or from a config file that could set --exec.
         ytdlp_argv, ytdlp_env = ytdlp_invocation()
         result = await spawn_subprocess(
             *ytdlp_argv,
+            "--ignore-config",
             "--dump-json",
             "--remote-components", "ejs:github",
+            "--",
             f"ytsearch{max_results}:{query}",
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
@@ -228,15 +261,17 @@ async def download_youtube_clip(
     description: str = Query("", description="Optional description"),
 ):
     """Download a clip from YouTube for voice cloning."""
+    video_url = _require_http_video_url(video_url)
     voice_id = str(uuid.uuid4())[:8]
     output_path = str(VOICE_GALLERY_DIR / f"{voice_id}.wav")
     temp_path = str(VOICE_GALLERY_DIR / f"{voice_id}.%(ext)s")
 
     try:
-        from services.media_tools import ytdlp_invocation
         ytdlp_argv, ytdlp_env = ytdlp_invocation()
         cmd = [
             *ytdlp_argv,
+            # First, so a config file cannot inject --exec before it is seen.
+            "--ignore-config",
             "--remote-components", "ejs:github",
             "-f",
             "bestaudio",
@@ -249,6 +284,7 @@ async def download_youtube_clip(
             "0",
             "-o",
             temp_path,
+            "--",
             video_url,
         ]
 
@@ -305,6 +341,8 @@ async def download_youtube_clip(
             "audio_path": output_path,
             "duration": duration,
         }
+    except HTTPException:
+        raise
     except FileNotFoundError:
         raise HTTPException(status_code=500, detail="yt-dlp not installed")
     except Exception as e:
