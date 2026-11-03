@@ -3,7 +3,7 @@ import { mkdtemp, mkdir, readFile, rm, writeFile, statfs } from 'node:fs/promise
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { downloadRuntimeInstaller } from './runtime-download';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   installRuntime,
   promoteLegacyRuntimeCaches,
@@ -55,6 +55,14 @@ async function interpreter(project: string) {
   await writeFile(runtimePython(project), 'interpreter');
   await writeFile(join(project, '.venv', 'pyvenv.cfg'), 'home = managed');
 }
+beforeEach(() => {
+  // Default region "auto" probes GitHub before install. A live probe can take
+  // the whole 5s test budget and time the fixture out.
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true })),
+  );
+});
 afterEach(async () => {
   vi.unstubAllGlobals();
   vi.unstubAllEnvs();
